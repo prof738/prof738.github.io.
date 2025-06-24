@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Jackpot Game Tracker</title>
+  <style>
+    html, body {
+      scroll-behavior: smooth;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      display: flex;
+      gap: 30px;
+      background: linear-gradient(to right, #e0f7fa, #fce4ec);
+    }
+    form {
+      flex: 1;
+      background-color: #ffffffcc;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .search-section, .jackpot-section {
+      margin-bottom: 20px;
+    }
+    label, input, select, button {
+      display: block;
+      margin: 10px 0;
+      padding: 8px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .jackpot-display {
+      flex: 2;
+      overflow-x: auto;
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .jackpot-group {
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background-color: #fff3e0;
+      border-radius: 8px;
+    }
+    .jackpot-group h3 {
+      margin-top: 0;
+      background-color: #ffcc80;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background-color: #ffffff;
+    }
+    th, td {
+      border: 1px solid #999;
+      padding: 6px;
+      text-align: center;
+    }
+    th {
+      background-color: #ffe0b2;
+    }
+    .highlight {
+      background-color: yellow;
+    }
+    button {
+      background-color: #26a69a;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #00796b;
+    }
+    .delete-btn {
+      background-color: #e53935;
+      margin-top: 10px;
+    }
+    .delete-btn:hover {
+      background-color: #b71c1c;
+    }
+  </style>
+  <script>
+    window.onload = () => {
+      window.scrollTo(0, 0);
+    };
+  </script>
+</head>
+<body>
+  <div>
+    <form id="gameForm">
+      <label for="jackpotType">Jackpot Type</label>
+      <select id="jackpotType" required>
+        <option value="">Select</option>
+        <option value="Mega Jackpot">Mega Jackpot</option>
+        <option value="Midweek Jackpot">Midweek Jackpot</option>
+      </select>
+      <input type="text" id="country" placeholder="Country" required>
+      <input type="datetime-local" id="dateTime" required>
+      <input type="text" id="match" placeholder="Match (Team A vs Team B)" required>
+      <input type="text" id="home" placeholder="Home Odds" required>
+      <input type="text" id="draw" placeholder="Draw Odds" required>
+      <input type="text" id="away" placeholder="Away Odds" required>
+      <input type="text" id="prediction" placeholder="Prediction" required>
+      <button type="submit">Add Game</button>
+    </form>
+
+    <div class="search-section">
+      <input type="text" id="search" placeholder="Search team name...">
+    </div>
+  </div>
+
+  <div class="jackpot-display" id="tablesContainer"></div>
+
+  <script>
+    const form = document.getElementById('gameForm');
+    const search = document.getElementById('search');
+    const container = document.getElementById('tablesContainer');
+
+    const limits = {
+      'Mega Jackpot': 17,
+      'Midweek Jackpot': 13
+    };
+
+    let data = JSON.parse(localStorage.getItem('jackpotGames')) || [];
+
+    function saveData() {
+      localStorage.setItem('jackpotGames', JSON.stringify(data));
+    }
+
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleDateString();
+    }
+
+    function addGame(game) {
+      let dt = new Date(game.dateTime);
+      let formattedDate = formatDate(game.dateTime);
+
+      let jackpot = data.find(j => j.type === game.type && j.games.length < limits[game.type]);
+      if (!jackpot) {
+        jackpot = { type: game.type, dateRange: formattedDate + ' to ' + formattedDate, games: [] };
+        data.unshift(jackpot);
+      }
+
+      const existingDates = jackpot.games.map(g => formatDate(g.dateTime));
+      if (!existingDates.includes(formattedDate)) {
+        const dates = jackpot.dateRange.split(' to ');
+        const allDates = [...dates.map(d => new Date(d)), new Date(formattedDate)].sort((a, b) => a - b);
+        jackpot.dateRange = formatDate(allDates[0]) + ' to ' + formatDate(allDates[allDates.length - 1]);
+      }
+
+      jackpot.games.push(game);
+      saveData();
+      renderTables();
+    }
+
+    function renderTables() {
+      container.innerHTML = '';
+      const term = search.value.toLowerCase();
+
+      data.forEach((group, groupIdx) => {
+        const filteredGames = term
+          ? group.games.filter(g => g.match.toLowerCase().includes(term))
+          : group.games;
+
+        if (filteredGames.length === 0) return;
+
+        const div = document.createElement('div');
+        div.className = 'jackpot-group';
+        const titleId = `title-${groupIdx}`;
+        div.innerHTML = `<h3 contenteditable="true" onblur="updateTitle(${groupIdx}, this.innerText)" id="${titleId}">${group.type} - ${group.dateRange}</h3>`;
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr>
+          <th>#</th>
+          <th>Country</th>
+          <th>Date : Time</th>
+          <th>Match</th>
+          <th>Home</th>
+          <th>Draw</th>
+          <th>Away</th>
+          <th>Prediction</th>
+          <th>Result</th>
+          <th>Edit</th>
+        </tr>`;
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        filteredGames.forEach((g, i) => {
+          const dt = new Date(g.dateTime);
+          const formattedDT = `${dt.toLocaleDateString()} : ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${g.country}</td>
+            <td>${formattedDT}</td>
+            <td class="match">${highlightMatch(g.match, term)}</td>
+            <td>${g.home}</td>
+            <td>${g.draw}</td>
+            <td>${g.away}</td>
+            <td contenteditable="true" onblur="updatePrediction(${groupIdx}, ${group.games.indexOf(g)}, this.innerText)">${g.prediction}</td>
+            <td contenteditable="true" style="font-weight: bold; color: #d32f2f;" onblur="updateResult(${groupIdx}, ${group.games.indexOf(g)}, this.innerText)">${g.result || ''}</td>
+            <td><button onclick="editGame(${groupIdx}, ${group.games.indexOf(g)})">Edit</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        div.appendChild(table);
+        div.innerHTML += `<button class='delete-btn' onclick='deleteGroup(${groupIdx})'>Delete Table</button>`;
+        container.appendChild(div);
+      });
+    }
+
+    function highlightMatch(text, term) {
+      if (!term) return text;
+      return text.replace(new RegExp(`(${term})`, 'gi'), '<span class="highlight">$1</span>');
+    }
+
+    window.updateResult = function(groupIdx, gameIdx, result) {
+      data[groupIdx].games[gameIdx].result = result.trim();
+      saveData();
+    };
+
+    window.updatePrediction = function(groupIdx, gameIdx, prediction) {
+      data[groupIdx].games[gameIdx].prediction = prediction.trim();
+      saveData();
+    };
+
+    window.editGame = function(groupIdx, gameIdx) {
+      const g = data[groupIdx].games[gameIdx];
+      document.getElementById('jackpotType').value = g.type;
+      document.getElementById('country').value = g.country;
+      document.getElementById('match').value = g.match;
+      document.getElementById('home').value = g.home;
+      document.getElementById('draw').value = g.draw;
+      document.getElementById('away').value = g.away;
+      document.getElementById('prediction').value = g.prediction;
+      document.getElementById('dateTime').value = g.dateTime;
+      data[groupIdx].games.splice(gameIdx, 1);
+      saveData();
+      renderTables();
+    };
+
+    window.updateTitle = function(groupIdx, newText) {
+      const match = newText.match(/(Mega Jackpot|Midweek Jackpot) - (.+)/);
+      if (match) {
+        data[groupIdx].type = match[1];
+        data[groupIdx].dateRange = match[2];
+        saveData();
+      } else {
+        alert("Please format title like: Mega Jackpot - 6/17/2025 to 6/18/2025");
+        renderTables();
+      }
+    };
+
+    window.deleteGroup = function(groupIdx) {
+      if (confirm("Are you sure you want to delete this entire table?")) {
+        data.splice(groupIdx, 1);
+        saveData();
+        renderTables();
+      }
+    };
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const game = {
+        type: document.getElementById('jackpotType').value,
+        country: document.getElementById('country').value,
+        match: document.getElementById('match').value,
+        home: document.getElementById('home').value,
+        draw: document.getElementById('draw').value,
+        away: document.getElementById('away').value,
+        prediction: document.getElementById('prediction').value,
+        dateTime: document.getElementById('dateTime').value,
+        result: ''
+      };
+      addGame(game);
+      form.reset();
+    });
+
+    search.addEventListener('input', renderTables);
+    renderTables();
+  </script>
+</body>
+</html>
